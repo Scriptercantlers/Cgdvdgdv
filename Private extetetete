@@ -1,0 +1,799 @@
+local MY_CHEAT_TITLE = "PRIVATE EXTERNAL"
+local ACCENT_COLOR = Color3.fromRGB(255, 0, 80)
+
+local workspace = cloneref(game:GetService("Workspace"))
+local Players = cloneref(game:GetService("Players"))
+local RunService = cloneref(game:GetService("RunService"))
+local CollectionService = cloneref(game:GetService("CollectionService"))
+local Lighting = cloneref(game:GetService("Lighting"))
+local UserInputService = cloneref(game:GetService("UserInputService"))
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+local cheat = {
+    Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/some1strange/builds/refs/heads/main/LinoriaModded.lua'))(),
+    drawings = {},
+    connections = {}
+}
+
+local VisualSettings = { Morning = false, NoShadows = false }
+local CamVars = { Enabled = false, Height = 0, Current = 0 }
+local MorningLabel = Drawing.new("Text")
+MorningLabel.Text = "я утра падклучел"
+MorningLabel.Color = Color3.fromRGB(255, 0, 80)
+MorningLabel.Size = 25
+MorningLabel.Font = 3
+MorningLabel.Outline = true
+MorningLabel.Visible = false
+
+local Teammates = {}
+local team_feature_enabled = false
+
+cheat.utility = {}
+cheat.utility.new_drawing = function(drawobj, args)
+    local obj = Drawing.new(drawobj)
+    for i, v in pairs(args) do obj[i] = v end
+    cheat.drawings[obj] = obj
+    return obj
+end
+
+local EspLibrary = {
+    settings = {
+        enabled = false, box = false, box_color = { ACCENT_COLOR, 1 },
+        realname = false, realname_color = { Color3.new(1, 1, 1), 1 },
+        dist = false, dist_color = { Color3.new(1, 1, 1), 1 },
+        image_en = false, chams_enabled = false, chams_color = Color3.fromRGB(255, 0, 0),
+        chams_opacity = 0.5, hb_enabled = false, hb_size = 1, hb_transparency = 0, hb_collision = true
+    }
+}
+
+local window = cheat.Library:CreateWindow({ Title = MY_CHEAT_TITLE, Center = true, AutoShow = true, TabPadding = 8 })
+local combatTab = window:AddTab('пвпе с гандонам')
+local visualsTab = window:AddTab('еэээ вайзуал')
+local miscTab = window:AddTab('миск')
+
+local hitboxGroup = combatTab:AddLeftTabbox():AddTab("увилечет башка")
+local magicbulletGroup = combatTab:AddRightTabbox():AddTab("player redirection")
+local espGroup = visualsTab:AddLeftTabbox():AddTab("пидарас есп")
+local chamsGroup = visualsTab:AddRightTabbox():AddTab("чомс")
+local miscGroup = miscTab:AddLeftTabbox():AddTab("разное говно")
+local teamGroup = miscTab:AddRightTabbox():AddTab("тимейты")
+local randGroup = miscTab:AddRightTabbox():AddTab("рандом хит")
+
+local validcharacters, assignedNames, nameCounter = {}, {}, 1
+
+local function addtovc(obj)
+    if not obj then return end
+    if not obj:FindFirstChild("Head") and not obj:FindFirstChild("HumanoidRootPart") and not obj:FindFirstChild("LowerTorso") then return end
+    validcharacters[obj] = obj
+    if not assignedNames[obj] then
+        local currentId = nameCounter
+        nameCounter = nameCounter + 1
+        assignedNames[obj] = "Loading " .. tostring(currentId)
+        task.spawn(function()
+            task.wait(0.5)
+            if not obj or not obj.Parent then return end
+            assignedNames[obj] = "Player " .. tostring(currentId)
+        end)
+    end
+end
+
+local function removefromvc(obj)
+    if not validcharacters[obj] then return end
+    validcharacters[obj] = nil
+    assignedNames[obj] = nil
+end
+
+for _, v in pairs(workspace:GetChildren()) do addtovc(v) end
+workspace.ChildAdded:Connect(addtovc)
+workspace.ChildRemoved:Connect(removefromvc)
+
+teamGroup:AddToggle('team_enable', { Text = 'включить систему тимейтов', Default = false, Callback = function(v) team_feature_enabled = v end })
+local teamDropdown = teamGroup:AddDropdown('team_select', { Values = {"пусто"}, Default = 1, Multi = false, Text = 'выбор игрока' })
+
+teamGroup:AddButton('➕ добавить / удалить', function()
+    local sel = Options.team_select.Value
+    if sel and sel ~= "пусто" then
+        if Teammates[sel] then
+            Teammates[sel] = nil
+            cheat.Library:Notify("Удален из тимейтов: " .. sel)
+        else
+            Teammates[sel] = true
+            cheat.Library:Notify("Добавлен в тимейты: " .. sel)
+        end
+    end
+end)
+
+teamGroup:AddButton('🔄 обновить список', function()
+    local names = {}
+    for obj, _ in pairs(validcharacters) do
+        if obj ~= LocalPlayer.Character then table.insert(names, assignedNames[obj] or obj.Name) end
+    end
+    if #names == 0 then table.insert(names, "пусто") end
+    teamDropdown:SetValues(names)
+end)
+
+local function update_rand_label()
+    local h = Options.rand_Head and Options.rand_Head.Value or 33
+    local b = Options.rand_Body and Options.rand_Body.Value or 33
+    local m = Options.rand_Miss and Options.rand_Miss.Value or 34
+    local total = h + b + m
+    if total == 0 then m = 1; total = 1 end
+    local hp = math.floor((h / total) * 100)
+    local bp = math.floor((b / total) * 100)
+    local mp = 100 - hp - bp
+    if cheat.randLabel then cheat.randLabel:SetText(string.format("%d%% Голова - %d%% Тело - %d%% Промах", hp, bp, mp)) end
+    return hp, bp, mp
+end
+
+randGroup:AddToggle('rand_Hit_Enabled', { Text = 'включить рандом хит', Default = false })
+cheat.randLabel = randGroup:AddLabel('33% Голова - 33% Тело - 34% Промах')
+randGroup:AddSlider('rand_Head', { Text = 'Шанс головы', Default = 33, Min = 0, Max = 100, Rounding = 0, Callback = update_rand_label })
+randGroup:AddSlider('rand_Body', { Text = 'Шанс тела', Default = 33, Min = 0, Max = 100, Rounding = 0, Callback = update_rand_label })
+randGroup:AddSlider('rand_Miss', { Text = 'Шанс промаха', Default = 34, Min = 0, Max = 100, Rounding = 0, Callback = update_rand_label })
+
+-- БЕЗОПАСНЫЙ ПОИСК GUI PARENT
+local guiParent
+local success = pcall(function()
+    guiParent = (gethui and gethui()) or game:GetService("CoreGui")
+end)
+if not success or not guiParent then
+    guiParent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local TextGui = Instance.new("ScreenGui", guiParent)
+TextGui.Name = "SixSevenGui"
+local TextLabel67 = Instance.new("TextLabel", TextGui)
+TextLabel67.Text = "67"
+TextLabel67.Size = UDim2.new(0, 300, 0, 150)
+TextLabel67.Position = UDim2.new(0.5, -150, 0, 20)
+TextLabel67.BackgroundTransparency = 1
+TextLabel67.TextColor3 = Color3.fromRGB(64, 224, 208)
+TextLabel67.TextTransparency = 0.65
+TextLabel67.Font = Enum.Font.FredokaOne
+TextLabel67.TextScaled = true
+TextLabel67.Visible = false
+
+local CustomSky = Instance.new("Sky")
+CustomSky.Name = "GazanSky"
+CustomSky.SkyboxBk = "rbxassetid://136608045748073"
+CustomSky.SkyboxDn = "rbxassetid://136608045748073"
+CustomSky.SkyboxFt = "rbxassetid://136608045748073"
+CustomSky.SkyboxLf = "rbxassetid://136608045748073"
+CustomSky.SkyboxRt = "rbxassetid://136608045748073"
+CustomSky.SkyboxUp = "rbxassetid://136608045748073"
+local OriginalSky = nil
+
+espGroup:AddToggle('vis_Skybox', { Text = 'газанул 67 скайбокс', Default = false, Callback = function(v) 
+    if v then
+        OriginalSky = Lighting:FindFirstChildOfClass("Sky")
+        if OriginalSky then OriginalSky.Parent = nil end
+        CustomSky.Parent = Lighting
+    else
+        CustomSky.Parent = nil
+        if OriginalSky then OriginalSky.Parent = Lighting end
+    end
+end })
+
+espGroup:AddToggle('six_with_ded', { Text = 'сикс с дидам', Default = false, Callback = function(v) TextLabel67.Visible = v end })
+
+local function get_targets_in_fov(usefov, fov_size)
+    local e_part, e_pos, t_part, t_pos = nil, nil, nil, nil
+    local e_dist, t_dist = usefov and fov_size or math.huge, usefov and fov_size or math.huge
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    
+    for _, character in pairs(validcharacters) do
+        if not character or not character.Parent then continue end
+        
+        -- ИГНОРИРУЕМ МЕРТВЫХ ИГРОКОВ В АИМБОТЕ
+        local humanoid = character:FindFirstChild("Humanoid") or character:FindFirstChildWhichIsA("Humanoid")
+        if humanoid and humanoid.Health <= 0 then continue end
+
+        local hitpart = character:FindFirstChild("LowerTorso") or character:FindFirstChild("HumanoidRootPart")
+        if hitpart then
+            local pos, onscreen = Camera:WorldToViewportPoint(hitpart.Position)
+            local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+            if (usefov and onscreen or not usefov) and dist < (usefov and fov_size or math.huge) then
+                local customName = assignedNames[character] or character.Name
+                if team_feature_enabled and Teammates[customName] then
+                    if dist < t_dist then t_part = hitpart; t_dist = dist; t_pos = Vector2.new(pos.X, pos.Y) end
+                else
+                    if dist < e_dist then e_part = hitpart; e_dist = dist; e_pos = Vector2.new(pos.X, pos.Y) end
+                end
+            end
+        end
+    end
+    return e_part, e_pos, t_part, t_pos
+end
+
+local domagic, snapline = false, false
+local fov, fov_show, fov_color, fov_outline, fov_size, fov_neon = false, false, Color3.new(1, 1, 1), false, 100, true
+
+local CircleOutline = cheat.utility.new_drawing("Circle", { Thickness = 4, Color = Color3.new(), ZIndex = 1, Filled = false })
+local CircleInline = cheat.utility.new_drawing("Circle", { Transparency = 1, Thickness = 1.5, ZIndex = 2, Filled = false })
+local snaplinedrawing = cheat.utility.new_drawing("Line", { Transparency = 1, Thickness = 1, ZIndex = 1, Color = Color3.new(1, 1, 1), Visible = false })
+local teamsnaplinedrawing = cheat.utility.new_drawing("Line", { Transparency = 1, Thickness = 1.5, ZIndex = 1, Color = Color3.fromRGB(0, 255, 0), Visible = false })
+
+local function update_fov()
+    CircleInline.Radius = fov_size; CircleInline.Visible = fov and fov_show
+    CircleOutline.Radius = fov_size; CircleOutline.Visible = (fov and fov_show and fov_outline)
+end
+
+magicbulletGroup:AddToggle('aimbot_ultraexploit',{Text = 'player redirection',Default = false,Callback = function(v) domagic = v end}):AddKeyPicker('aimbot_ultraexploit_bind', {Default = 'None',SyncToggleState = true,Mode = 'Toggle',Text = 'player redirection',NoUI = false})
+magicbulletGroup:AddToggle('aimbot_ultraexploit_snapline', {Text = 'snapline to target',Default = false,Callback = function(Value) snapline = Value end})
+magicbulletGroup:AddToggle('aimbot_fov', {Text = 'use fov',Default = false,Callback = function(Value) fov = Value; update_fov() end})
+
+local Depbox1 = magicbulletGroup:AddDependencyBox()
+Depbox1:AddToggle('aimbot_fov_show', {Text = 'show fov',Default = false,Callback = function(Value) fov_show = Value; update_fov() end}):AddColorPicker('aimbot_fov_color',{Default = Color3.new(1, 1, 1),Title = 'fov color',Transparency = 0,Callback = function(Value) fov_color = Value; update_fov() end})
+Depbox1:AddToggle('aimbot_fov_outline', {Text = 'fov outline',Default = false,Callback = function(Value) fov_outline = Value; update_fov() end})
+Depbox1:AddToggle('aimbot_fov_neon', {Text = 'неон перелив (neon)',Default = true,Callback = function(Value) fov_neon = Value end})
+Depbox1:AddSlider('aimbot_fov_size',{Text = 'target fov',Default = 100,Min = 10,Max = 1000,Rounding = 0,Compact = true,Callback = function(State) fov_size = State; update_fov() end})
+
+local target, e_spos, t_target, t_spos, cachedtarget;
+RunService.RenderStepped:Connect(function()
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    target, e_spos, t_target, t_spos = get_targets_in_fov(fov, fov_size)
+    
+    if snapline then
+        if e_spos then snaplinedrawing.Visible = true; snaplinedrawing.From = center; snaplinedrawing.To = e_spos else snaplinedrawing.Visible = false end
+        if t_spos then teamsnaplinedrawing.Visible = true; teamsnaplinedrawing.From = center; teamsnaplinedrawing.To = t_spos else teamsnaplinedrawing.Visible = false end
+    else
+        snaplinedrawing.Visible = false; teamsnaplinedrawing.Visible = false
+    end
+    
+    CircleOutline.Position = center; CircleInline.Position = center
+    if fov and fov_show then
+        if fov_neon then
+            CircleInline.NumSides = 16; CircleOutline.NumSides = 16
+            local hue = (tick() % 3) / 3
+            local neonColor = Color3.fromHSV(hue, 0.8, 1)
+            CircleInline.Color = neonColor
+            if fov_outline then CircleOutline.Color = neonColor; CircleOutline.Transparency = 0.3 + math.abs(math.sin(tick() * 3)) * 0.4 end
+        else
+            CircleInline.NumSides = 64; CircleOutline.NumSides = 64
+            CircleInline.Color = fov_color
+            if fov_outline then CircleOutline.Color = Color3.new(0, 0, 0); CircleOutline.Transparency = 1 end
+        end
+    end
+end)
+
+local function add_whiz(obj)
+    if not obj or not obj:FindFirstChild("whiz") or not domagic then return end
+    local confirmed = false
+    local hit_type = "body"
+    if Toggles.rand_Hit_Enabled and Toggles.rand_Hit_Enabled.Value then
+        local hp, bp, mp = update_rand_label()
+        local roll = math.random(1, 100)
+        if roll <= hp then hit_type = "head" elseif roll <= hp + bp then hit_type = "body" else hit_type = "miss" end
+    end
+
+    obj:GetPropertyChangedSignal("CFrame"):Connect(function()
+        if not confirmed and (Camera.CFrame.Position - obj.CFrame.Position).Magnitude < 1 then confirmed = true end
+        if confirmed and (cachedtarget or target) then
+            if not cachedtarget then cachedtarget = target end
+            if hit_type == "miss" then return end
+            local bulletpos = obj.CFrame.Position
+            local char = cachedtarget.Parent
+            if char and char.PrimaryPart then
+                local root = char.PrimaryPart
+                local head = char:FindFirstChild("Head")
+                local torso = char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso") or root
+                local target_part = (hit_type == "head") and head or torso
+                if root and target_part then
+                    local offset_x = root.Position.X - target_part.Position.X
+                    local offset_z = root.Position.Z - target_part.Position.Z
+                    root.CFrame = CFrame.new(Vector3.new(bulletpos.X + offset_x, cachedtarget.Position.Y, bulletpos.Z + offset_z))
+                end
+            end
+        end
+    end)
+    local hbConnection
+    hbConnection = RunService.Heartbeat:Connect(function()
+        if not obj or not obj.Parent then cachedtarget = false; if hbConnection then hbConnection:Disconnect() end end
+    end)
+end
+
+task.spawn(function()
+    local const = workspace:WaitForChild("Const", 5)
+    if const then
+        local ignore = const:WaitForChild("Ignore", 5)
+        if ignore then ignore.ChildAdded:Connect(add_whiz) end
+    end
+end)
+
+local function applyChams(model)
+    if model == LocalPlayer.Character then return end
+    if model:IsA("Model") and model:FindFirstChild("HumanoidRootPart") then
+        local highlight = model:FindFirstChild("UniversalCham") or Instance.new("Highlight", model)
+        highlight.Name = "UniversalCham"
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Enabled = false
+        highlight.FillColor = EspLibrary.settings.chams_color
+        highlight.FillTransparency = 1 - EspLibrary.settings.chams_opacity
+        highlight.OutlineTransparency = 0
+    end
+end
+
+local function create_esp(model)
+    if model == LocalPlayer.Character then return end
+    
+    task.spawn(function()
+        task.wait(0.5) -- Ждем пока игрок полностью прогрузится
+        if not model or not model.Parent then return end
+        
+        applyChams(model)
+        
+        local head = model:FindFirstChild("Head")
+        local hrp = model:FindFirstChild("HumanoidRootPart")
+        local humanoid = model:FindFirstChild("Humanoid") or model:FindFirstChildWhichIsA("Humanoid")
+
+        if head and hrp then
+            local imgGui = Instance.new("BillboardGui", head)
+            imgGui.Name = "PlayerMemeImage"
+            imgGui.Size = UDim2.new(4, 0, 4, 0)
+            imgGui.AlwaysOnTop = true
+            imgGui.StudsOffset = Vector3.new(0, 3.5, 0)
+            local imgLabel = Instance.new("ImageLabel", imgGui)
+            imgLabel.Size = UDim2.new(1, 0, 1, 0)
+            imgLabel.BackgroundTransparency = 1
+            imgLabel.Image = "rbxassetid://114132252876567"
+
+            local obj = {
+                box = cheat.utility.new_drawing("Square", { Filled = false, Thickness = 1, Visible = false }),
+                name = cheat.utility.new_drawing("Text", { Center = true, Visible = false, Size = 13, Outline = true, Font = 2 }),
+                dist = cheat.utility.new_drawing("Text", { Center = true, Visible = false, Size = 13, Outline = true, Font = 2 }),
+                team_text = cheat.utility.new_drawing("Text", { Center = true, Visible = false, Text = "ТИМЕЙТ!!", Color = Color3.fromRGB(0, 255, 0), Font = 2, Size = 13, Outline = true })
+            }
+
+            local connection
+            connection = RunService.RenderStepped:Connect(function()
+                -- ПРОВЕРКА НА СМЕРТЬ ИЛИ ВЫХОД ИГРОКА (УДАЛЕНИЕ ПРИЗРАКОВ)
+                if not model or not model.Parent or not head or not head.Parent or (humanoid and humanoid.Health <= 0) then
+                    for _, o in pairs(obj) do 
+                        o.Visible = false
+                        o:Remove() -- Полностью стираем рисунки из памяти
+                    end
+                    if imgGui then imgGui:Destroy() end
+                    local highlight = model:FindFirstChild("UniversalCham")
+                    if highlight then highlight:Destroy() end
+                    
+                    if connection then connection:Disconnect() end
+                    return
+                end
+
+                -- ПРОВЕРКА ДИСТАНЦИИ (МАКСИМУМ 1200)
+                local distance = (Camera.CFrame.Position - head.Position).Magnitude
+                local inRange = distance <= 1200
+
+                if EspLibrary.settings.hb_enabled then
+                    head.Size = Vector3.new(2 * EspLibrary.settings.hb_size, 2 * EspLibrary.settings.hb_size, 2 * EspLibrary.settings.hb_size)
+                    head.Transparency = EspLibrary.settings.hb_transparency
+                    head.CanCollide = EspLibrary.settings.hb_collision
+                else
+                    head.Size = Vector3.new(2, 1, 1)
+                    head.Transparency = 0
+                    head.CanCollide = true
+                end
+                
+                if imgGui then imgGui.Enabled = EspLibrary.settings.enabled and EspLibrary.settings.image_en and inRange end
+
+                local highlight = model:FindFirstChild("UniversalCham")
+                if highlight then
+                    highlight.Enabled = EspLibrary.settings.chams_enabled and inRange
+                    highlight.FillColor = EspLibrary.settings.chams_color
+                    highlight.FillTransparency = 1 - EspLibrary.settings.chams_opacity
+                end
+
+                if not EspLibrary.settings.enabled or not inRange then 
+                    for _, o in pairs(obj) do o.Visible = false end
+                    return 
+                end
+
+                local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                if onScreen then
+                    local customName = assignedNames[model] or model.Name
+                    local is_team = team_feature_enabled and Teammates[customName]
+
+                    obj.box.Visible = EspLibrary.settings.box
+                    obj.box.Size = Vector2.new(2000 / screenPos.Z, 2500 / screenPos.Z)
+                    obj.box.Position = Vector2.new(screenPos.X - obj.box.Size.X / 2, screenPos.Y - obj.box.Size.Y / 2)
+                    obj.box.Color = EspLibrary.settings.box_color[1]
+                    
+                    obj.name.Visible = EspLibrary.settings.realname
+                    obj.name.Text = customName
+                    obj.name.Position = obj.box.Position - Vector2.new(0, 15)
+                    obj.name.Color = EspLibrary.settings.realname_color[1]
+                    
+                    obj.dist.Visible = EspLibrary.settings.dist
+                    obj.dist.Text = math.floor(distance) .. "m"
+                    obj.dist.Position = obj.box.Position + Vector2.new(obj.box.Size.X / 2, obj.box.Size.Y + 2)
+                    obj.dist.Color = EspLibrary.settings.dist_color[1]
+
+                    if is_team then
+                        obj.team_text.Visible = true
+                        obj.team_text.Position = obj.name.Visible and (obj.name.Position - Vector2.new(0, 15)) or (obj.box.Position - Vector2.new(0, 15))
+                        obj.team_text.Transparency = 0.4 + math.abs(math.sin(tick() * 6)) * 0.6
+                    else
+                        obj.team_text.Visible = false
+                    end
+                else
+                    for _, o in pairs(obj) do o.Visible = false end
+                end
+            end)
+        end
+    end)
+end
+
+for _, v in pairs(workspace:GetChildren()) do create_esp(v) end
+workspace.ChildAdded:Connect(create_esp)
+
+hitboxGroup:AddToggle('hb_en', { Text = 'включетт', Default = false, Callback = function(v) EspLibrary.settings.hb_enabled = v end })
+hitboxGroup:AddSlider('hb_sz', { Text = 'размеп галави', Default = 1, Min = 1, Max = 10, Rounding = 1, Callback = function(v) EspLibrary.settings.hb_size = v end })
+hitboxGroup:AddSlider('hb_tr', { Text = 'насколька можна увидет', Default = 0, Min = 0, Max = 1, Rounding = 1, Callback = function(v) EspLibrary.settings.hb_transparency = v end })
+hitboxGroup:AddToggle('hb_col', { Text = 'вход в башка', Default = true, Callback = function(v) EspLibrary.settings.hb_collision = v end })
+
+espGroup:AddToggle('esp_master', { Text = 'включетт', Default = false, Callback = function(v) EspLibrary.settings.enabled = v end })
+espGroup:AddToggle('esp_box', { Text = 'аэээ ящек', Default = false, Callback = function(v) EspLibrary.settings.box = v end }):AddColorPicker('box_col', { Default = ACCENT_COLOR, Callback = function(v) EspLibrary.settings.box_color[1] = v end })
+espGroup:AddToggle('esp_name', { Text = 'нодпесь', Default = false, Callback = function(v) EspLibrary.settings.realname = v end })
+espGroup:AddToggle('esp_dist', { Text = 'насколька долеко', Default = false, Callback = function(v) EspLibrary.settings.dist = v end })
+espGroup:AddToggle('esp_image_en', { Text = 'Картинка над игроком', Default = false, Callback = function(v) EspLibrary.settings.image_en = v end })
+
+espGroup:AddToggle('morning_en', { Text = 'утра сьагодна', Default = false, Callback = function(v) VisualSettings.Morning = v end })
+espGroup:AddToggle('noshadows_en', { Text = 'тени пайдут нохуй', Default = false, Callback = function(v) VisualSettings.NoShadows = v end })
+
+chamsGroup:AddToggle('chams_enable', { Text = 'включить чомс', Default = false, Callback = function(v) EspLibrary.settings.chams_enabled = v end }):AddColorPicker('chams_col', { Default = Color3.fromRGB(255, 0, 0), Callback = function(v) EspLibrary.settings.chams_color = v end })
+chamsGroup:AddSlider('chams_alpha', { Text = 'Яркость чомса', Default = 0.5, Min = 0, Max = 1, Rounding = 1, Callback = function(v) EspLibrary.settings.chams_opacity = v end })
+
+miscGroup:AddToggle('cam_active', { Text = 'включить подъем', Default = false, Callback = function(v) CamVars.Enabled = v end })
+miscGroup:AddSlider('cam_h', { Text = 'тягучая штука висоти', Default = 0, Min = 0, Max = 250, Rounding = 1, Callback = function(v) CamVars.Height = v end })
+
+local bgMusic = Instance.new("Sound", game:GetService("CoreGui"))
+bgMusic.Name = "UnhappyS0rrow"
+bgMusic.SoundId = "rbxassetid://88523902860927"
+bgMusic.Looped = true
+bgMusic.Volume = 1
+
+miscGroup:AddToggle('play_music', { Text = 'мьюзика (Unhappy s0rrow)', Default = false, Callback = function(v) if v then bgMusic:Play() else bgMusic:Stop() end end })
+
+local MemeUI = Instance.new("ScreenGui", guiParent)
+MemeUI.Name = "MemeWatermark"
+MemeUI.Enabled = false
+local MemeImage = Instance.new("ImageLabel", MemeUI)
+MemeImage.Size = UDim2.new(0, 250, 0, 250)
+MemeImage.Position = UDim2.new(1, -260, 1, -260)
+MemeImage.BackgroundTransparency = 1
+MemeImage.Image = "rbxassetid://93764948090597"
+
+miscGroup:AddToggle('ui_meme_img', { Text = 'Картинка на экране', Default = false, Callback = function(v) MemeUI.Enabled = v end })
+
+-- ========================================================================
+-- [ КАСТОМНЫЙ ЧАТ ВНУТРИ СКРИПТА (ОБХОД БЛОКИРОВКИ ИГРЫ) ]
+-- ========================================================================
+local ChatGui = Instance.new("ScreenGui", guiParent)
+ChatGui.Name = "CustomCheatChat"
+ChatGui.Enabled = true
+ChatGui.ResetOnSpawn = false
+
+local ChatFrame = Instance.new("Frame", ChatGui)
+ChatFrame.Size = UDim2.new(0, 450, 0, 350)
+ChatFrame.Position = UDim2.new(0.5, -225, 0.5, -175)
+ChatFrame.BackgroundColor3 = Color3.fromRGB(30, 20, 30)
+ChatFrame.BackgroundTransparency = 0.2
+ChatFrame.BorderSizePixel = 0
+ChatFrame.Active = true
+ChatFrame.Draggable = true
+Instance.new("UICorner", ChatFrame).CornerRadius = UDim.new(0, 12)
+local stroke = Instance.new("UIStroke", ChatFrame)
+stroke.Color = Color3.fromRGB(255, 182, 193)
+stroke.Thickness = 1.5
+stroke.Transparency = 0.3
+
+local Topbar = Instance.new("Frame", ChatFrame)
+Topbar.Size = UDim2.new(1, 0, 0, 40)
+Topbar.BackgroundTransparency = 1
+
+local Title = Instance.new("TextLabel", Topbar)
+Title.Size = UDim2.new(1, -40, 1, 0)
+Title.Position = UDim2.new(0, 15, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "🌸 Нежный Чат (Обход) 🌸"
+Title.TextColor3 = Color3.fromRGB(255, 182, 193)
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16
+
+local CloseBtn = Instance.new("TextButton", Topbar)
+CloseBtn.Size = UDim2.new(0, 40, 1, 0)
+CloseBtn.Position = UDim2.new(1, -40, 0, 0)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.Text = "✖"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 182, 193)
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextSize = 18
+
+local Scroll = Instance.new("ScrollingFrame", ChatFrame)
+Scroll.Size = UDim2.new(1, -20, 1, -90)
+Scroll.Position = UDim2.new(0, 10, 0, 40)
+Scroll.BackgroundTransparency = 1
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+Scroll.ScrollBarThickness = 3
+Scroll.ScrollBarImageColor3 = Color3.fromRGB(255, 182, 193)
+Scroll.AutomaticCanvasSize = Enum.AutomaticSize.None
+        
+local UIListLayout = Instance.new("UIListLayout", Scroll)
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 6)
+
+local InputBox = Instance.new("TextBox", ChatFrame)
+InputBox.Size = UDim2.new(1, -20, 0, 35)
+InputBox.Position = UDim2.new(0, 10, 1, -45)
+InputBox.BackgroundColor3 = Color3.fromRGB(45, 35, 45)
+InputBox.BackgroundTransparency = 0.4
+InputBox.TextColor3 = Color3.new(1, 1, 1)
+InputBox.PlaceholderText = " Напиши что-нибудь милое..."
+InputBox.PlaceholderColor3 = Color3.fromRGB(180, 150, 180)
+InputBox.TextXAlignment = Enum.TextXAlignment.Left
+InputBox.Font = Enum.Font.Gotham
+InputBox.TextSize = 14
+InputBox.ClearTextOnFocus = false
+Instance.new("UICorner", InputBox).CornerRadius = UDim.new(0, 8)
+local inStroke = Instance.new("UIStroke", InputBox)
+inStroke.Color = Color3.fromRGB(255, 182, 193)
+inStroke.Thickness = 1
+inStroke.Transparency = 0.6
+
+local newMessagesCount = 0
+local recentMessages = {}
+local systemMessages = {}
+
+local function addChatMessage(sender, text, isSystem)
+    local msgLabel = Instance.new("TextLabel", Scroll)
+    msgLabel.Size = UDim2.new(1, -10, 0, 0)
+    msgLabel.AutomaticSize = Enum.AutomaticSize.Y
+    msgLabel.BackgroundTransparency = 1
+    msgLabel.TextWrapped = true
+    msgLabel.TextXAlignment = Enum.TextXAlignment.Left
+    msgLabel.TextYAlignment = Enum.TextYAlignment.Top
+    msgLabel.Font = Enum.Font.Gotham
+    msgLabel.TextSize = 14
+    msgLabel.RichText = true
+            
+    local hexColor = isSystem and "#98FB98" or "#DDA0DD"
+    local prefix = isSystem and "[Система]" or "[" .. sender .. "]"
+            
+    local safeText = text:gsub("<", "&lt;"):gsub(">", "&gt;")
+    msgLabel.Text = string.format('<b><font color="%s">%s:</font></b> <font color="#F0F0F0">%s</font>', hexColor, prefix, safeText)
+end
+
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    Scroll.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 20)
+    Scroll.CanvasPosition = Vector2.new(0, Scroll.CanvasSize.Y.Offset)
+end)
+
+CloseBtn.MouseButton1Click:Connect(function() ChatGui.Enabled = false end)
+
+local function sendChatMessage(text)
+    pcall(function()
+        game:GetService("Players"):Chat(text)
+    end)
+end
+
+local function handleIncomingMessage(sender, text)
+    if systemMessages[text] and sender ~= "Система" then return end
+
+    local msgId = sender .. "_" .. text
+    if recentMessages[msgId] then return end
+    recentMessages[msgId] = true
+    task.delay(0.5, function() recentMessages[msgId] = nil end)
+
+    addChatMessage(sender, text, sender == "Система")
+    if not ChatGui.Enabled then
+        newMessagesCount = newMessagesCount + 1
+    end
+end
+
+InputBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed and InputBox.Text ~= "" then
+        local msg = InputBox.Text
+        InputBox.Text = ""
+        sendChatMessage(msg)
+        handleIncomingMessage(LocalPlayer.Name, msg)
+    end
+end)
+
+for _, p in pairs(Players:GetPlayers()) do
+    p.Chatted:Connect(function(msg) handleIncomingMessage(p.Name, msg) end)
+end
+Players.PlayerAdded:Connect(function(p)
+    p.Chatted:Connect(function(msg) handleIncomingMessage(p.Name, msg) end)
+end)
+
+task.spawn(function()
+    while task.wait(120) do
+        if newMessagesCount > 0 then
+            cheat.Library:Notify("Новые сообщения в чате! 🌸")
+            newMessagesCount = 0
+        end
+    end
+end)
+
+miscGroup:AddButton('открыть чат', function()
+    ChatGui.Enabled = true
+    newMessagesCount = 0
+end)
+
+task.spawn(function()
+    if not LocalPlayer.Character then LocalPlayer.CharacterAdded:Wait() end
+    task.wait(3)
+    local sysMsg = string.format("Система-игрок(%s) заинжектил чит! На этом сервере))", LocalPlayer.Name)
+    systemMessages[sysMsg] = true
+    sendChatMessage(sysMsg)
+    handleIncomingMessage("Система", sysMsg)
+end)
+
+RunService:BindToRenderStep("OnlyUpCamera", Enum.RenderPriority.Camera.Value + 1, function()
+    local target = (CamVars.Enabled) and CamVars.Height or 0
+    CamVars.Current = CamVars.Current + (target - CamVars.Current) * 0.05
+    if math.abs(CamVars.Current) > 0.001 then
+        Camera.CFrame = Camera.CFrame * CFrame.new(0, CamVars.Current, 0)
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if VisualSettings.Morning then
+        if Lighting.ClockTime > 18 or Lighting.ClockTime < 6 then
+            Lighting.ClockTime = 9
+            MorningLabel.Visible = true
+            MorningLabel.Position = Vector2.new(Camera.ViewportSize.X - 220, 60)
+        else MorningLabel.Visible = false end
+    else MorningLabel.Visible = false end
+
+    if VisualSettings.NoShadows then
+        Lighting.GlobalShadows = false
+        Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+    else
+        Lighting.GlobalShadows = true
+    end
+end)
+
+local worldEspBox = visualsTab:AddRightTabbox()
+local worldTab = worldEspBox:AddTab("World ESP (Лут)")
+
+worldTab:AddToggle('bags_en', { Text = 'Bags (Chams)', Default = false })
+worldTab:AddToggle('bags_box', { Text = 'Show Box', Default = false })
+worldTab:AddToggle('bags_name', { Text = 'Show Name', Default = false })
+worldTab:AddToggle('bags_dist', { Text = 'Show Distance', Default = false })
+worldTab:AddToggle('bags_rainbow', { Text = 'Rainbow Mode', Default = false }):AddColorPicker('bags_color', { Default = Color3.fromRGB(0, 255, 255) })
+worldTab:AddSlider('bags_trans', { Text = 'Opacity', Default = 99, Min = 0, Max = 100, Rounding = 0 })
+
+worldTab:AddToggle('crates_en', { Text = 'Crates (Chams)', Default = false })
+worldTab:AddToggle('crates_box', { Text = 'Show Box', Default = false })
+worldTab:AddToggle('crates_name', { Text = 'Show Name', Default = false })
+worldTab:AddToggle('crates_dist', { Text = 'Show Distance', Default = false })
+worldTab:AddToggle('crates_rainbow', { Text = 'Rainbow Mode', Default = false }):AddColorPicker('crates_color', { Default = Color3.fromRGB(0, 255, 127) })
+worldTab:AddSlider('crates_trans', { Text = 'Opacity', Default = 50, Min = 0, Max = 100, Rounding = 0 })
+
+local activeBags, activeCrates, MAX_RENDER_DISTANCE = {}, {}, 1200
+local ChamStorage = guiParent:FindFirstChild("TridentVisuals") or Instance.new("Folder", guiParent)
+ChamStorage.Name = "TridentVisuals"
+
+local function createDrawings()
+    return {
+        box = cheat.utility.new_drawing("Square", { Filled = false, Thickness = 1, Visible = false }),
+        name = cheat.utility.new_drawing("Text", { Center = true, Visible = false, Size = 13, Outline = true, Font = 2 }),
+        dist = cheat.utility.new_drawing("Text", { Center = true, Visible = false, Size = 11, Outline = true, Font = 2 })
+    }
+end
+
+local function applyWorldESP(model)
+    if typeof(model) ~= "Instance" or not model:IsA("Model") then return end
+
+    if model.Name == "Model" and #model:GetChildren() == 2 and model:FindFirstChild("Part") then
+        local p1 = model:FindFirstChild("Part")
+        if p1:IsA("BasePart") and p1.Size.Y < 3 and p1.Size.X < 3 and p1.Size.Z < 3 then
+            local id = "Bag_" .. model:GetDebugId()
+            local hl = ChamStorage:FindFirstChild(id) or Instance.new("Highlight", ChamStorage)
+            hl.Name = id; hl.Adornee = model; hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            activeBags[model] = { highlight = hl, drawings = createDrawings(), part = p1, name = "мешок" }
+        end
+    end
+    
+    if not model.Name:find("InteriorContainer") and not model:FindFirstChild("State") then
+        local children = {}
+        for _, child in pairs(model:GetChildren()) do children[child.Name] = true end
+        local isCrate, memeName = false, ""
+
+        if children['Bottom'] and children['Top'] then isCrate = true; memeName = "йощек абични"
+        elseif children['box'] and children['trash'] then isCrate = true; memeName = "мусор"
+        elseif children['Dispenser'] and children['Machine'] then isCrate = true; memeName = "автомат с хилкай"
+        elseif children['Body'] and children['Wheel'] then isCrate = true; memeName = "телега с лутом"
+        elseif model.Name == "CashRegister" or model.Name == "Register" then isCrate = true; memeName = "каса"
+        elseif model.Name == "Safe" then isCrate = true; memeName = "сейф ебать" end
+
+        if model:FindFirstChild("Humanoid") then isCrate = false end
+
+        if isCrate then
+            local id = "Crate_" .. model:GetDebugId()
+            local hl = ChamStorage:FindFirstChild(id) or Instance.new("Highlight", ChamStorage)
+            hl.Name = id; hl.Adornee = model; hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            activeCrates[model] = { highlight = hl, drawings = createDrawings(), part = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart"), name = memeName }
+        end
+    end
+end
+
+for _, obj in ipairs(workspace:GetDescendants()) do applyWorldESP(obj) end
+workspace.DescendantAdded:Connect(function(desc) task.wait(0.1); applyWorldESP(desc) end)
+workspace.DescendantRemoving:Connect(function(obj)
+    if activeBags[obj] then activeBags[obj].highlight:Destroy(); for _, d in pairs(activeBags[obj].drawings) do d:Remove() end; activeBags[obj] = nil end
+    if activeCrates[obj] then activeCrates[obj].highlight:Destroy(); for _, d in pairs(activeCrates[obj].drawings) do d:Remove() end; activeCrates[obj] = nil end
+end)
+
+local rainbowHueWorld = 0
+RunService.RenderStepped:Connect(function(dt)
+    rainbowHueWorld = (rainbowHueWorld + dt * 0.2) % 1
+    local rainbowColor = Color3.fromHSV(rainbowHueWorld, 1, 1)
+
+    for model, data in pairs(activeBags) do
+        if not model or not model.Parent or not data.part or not data.part.Parent then continue end
+        local dist = (Camera.CFrame.Position - data.part.Position).Magnitude
+        local inRange = dist <= MAX_RENDER_DISTANCE
+        local pos, onScreen = Camera:WorldToViewportPoint(data.part.Position)
+        local color = (Toggles.bags_rainbow.Value) and rainbowColor or Options.bags_color.Value
+
+        if Toggles.bags_en.Value and inRange then
+            data.highlight.Enabled = true; data.highlight.FillColor = color; data.highlight.OutlineColor = color
+            data.highlight.FillTransparency = 1 - (Options.bags_trans.Value / 100); data.highlight.OutlineTransparency = 1 - (Options.bags_trans.Value / 100)
+        else data.highlight.Enabled = false end
+
+        if onScreen and inRange and (Toggles.bags_box.Value or Toggles.bags_name.Value or Toggles.bags_dist.Value) then
+            data.drawings.box.Visible = Toggles.bags_box.Value
+            data.drawings.box.Size = Vector2.new(1500 / pos.Z, 1500 / pos.Z)
+            data.drawings.box.Position = Vector2.new(pos.X - data.drawings.box.Size.X / 2, pos.Y - data.drawings.box.Size.Y / 2)
+            data.drawings.box.Color = color
+
+            data.drawings.name.Visible = Toggles.bags_name.Value
+            data.drawings.name.Text = data.name
+            data.drawings.name.Position = data.drawings.box.Position - Vector2.new(0, 15)
+            data.drawings.name.Color = color
+
+            data.drawings.dist.Visible = Toggles.bags_dist.Value
+            data.drawings.dist.Text = math.floor(dist) .. "m"
+            data.drawings.dist.Position = data.drawings.box.Position + Vector2.new(data.drawings.box.Size.X / 2, data.drawings.box.Size.Y + 2)
+            data.drawings.dist.Color = color
+        else
+            for _, d in pairs(data.drawings) do d.Visible = false end
+        end
+    end
+    
+    for model, data in pairs(activeCrates) do
+        if not model or not model.Parent or not data.part or not data.part.Parent then continue end
+        local dist = (Camera.CFrame.Position - data.part.Position).Magnitude
+        local inRange = dist <= MAX_RENDER_DISTANCE
+        local pos, onScreen = Camera:WorldToViewportPoint(data.part.Position)
+        local color = (Toggles.crates_rainbow.Value) and rainbowColor or Options.crates_color.Value
+
+        if Toggles.crates_en.Value and inRange then
+            data.highlight.Enabled = true; data.highlight.FillColor = color; data.highlight.OutlineColor = color
+            data.highlight.FillTransparency = 1 - (Options.crates_trans.Value / 100); data.highlight.OutlineTransparency = 1 - (Options.crates_trans.Value / 100)
+        else data.highlight.Enabled = false end
+
+        if onScreen and inRange and (Toggles.crates_box.Value or Toggles.crates_name.Value or Toggles.crates_dist.Value) then
+            data.drawings.box.Visible = Toggles.crates_box.Value
+            data.drawings.box.Size = Vector2.new(2500 / pos.Z, 2500 / pos.Z)
+            data.drawings.box.Position = Vector2.new(pos.X - data.drawings.box.Size.X / 2, pos.Y - data.drawings.box.Size.Y / 2)
+            data.drawings.box.Color = color
+
+            data.drawings.name.Visible = Toggles.crates_name.Value
+            data.drawings.name.Text = data.name
+            data.drawings.name.Position = data.drawings.box.Position - Vector2.new(0, 15)
+            data.drawings.name.Color = color
+
+            data.drawings.dist.Visible = Toggles.crates_dist.Value
+            data.drawings.dist.Text = math.floor(dist) .. "m"
+            data.drawings.dist.Position = data.drawings.box.Position + Vector2.new(data.drawings.box.Size.X / 2, data.drawings.box.Size.Y + 2)
+            data.drawings.dist.Color = color
+        else
+            for _, d in pairs(data.drawings) do d.Visible = false end
+        end
+    end
+end)
